@@ -6,6 +6,16 @@ import asyncio
 
 app = FastAPI(title="Cloud Vulnerability Tracker")
 
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Sources
 DOC_URLS = {
     "gke": "https://docs.cloud.google.com/kubernetes-engine/security-bulletins",

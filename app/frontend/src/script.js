@@ -1,4 +1,4 @@
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = "/api";
 const tableBody = document.getElementById("tableBody");
 const sourceFilter = document.getElementById("sourceFilter");
 const cveFilter = document.getElementById("cveFilter");
@@ -37,7 +37,6 @@ function renderTable(data) {
 		}" target="_blank" class="text-blue-600 hover:underline">${
 			b.id
 		}</a></td>
-        <td class="p-2">${b.published || "-"}</td>
         <td class="p-2">${b.cves.join(", ")}</td>
         <td class="p-2">${b.managed}</td>
         <td class="p-2">${b.summary}</td>
