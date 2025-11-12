@@ -1,1 +1,86 @@
+options:
+  logging: CLOUD_LOGGING_ONLY
 
+substitutions:
+  _REGION: "us-central1"
+  _AR_REPO: "proj-levelup-9-repo"
+  _CLUSTER: "kubernetes-cluster1"
+  _CLUSTER_LOCATION: "europe-north1-b"
+  _NAMESPACE: "app"
+  _BACKEND_DIR: "backend"
+  _FRONTEND_DIR: "frontend"
+  _BACKEND_IMAGE_NAME: "backend"
+  _FRONTEND_IMAGE_NAME: "frontend"
+
+steps:
+  # Build & push obraz Dockera - BACKEND
+  - name: gcr.io/cloud-builders/docker
+    args: [
+      "build",
+      "-t", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_BACKEND_IMAGE_NAME}:${SHORT_SHA}",
+      "${_BACKEND_DIR}"
+    ]
+  - name: gcr.io/cloud-builders/docker
+    args: [
+      "push",
+      "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_BACKEND_IMAGE_NAME}:${SHORT_SHA}"
+    ]
+
+  # Build & push obraz Dockera - FRONTEND
+  - name: gcr.io/cloud-builders/docker
+    args: [
+      "build",
+      "-t", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_FRONTEND_IMAGE_NAME}:${SHORT_SHA}",
+      "${_FRONTEND_DIR}"
+    ]
+  - name: gcr.io/cloud-builders/docker
+    args: [
+      "push",
+      "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_FRONTEND_IMAGE_NAME}:${SHORT_SHA}"
+    ]
+
+  # Połączenie z klastrem
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        gcloud container clusters get-credentials "${_CLUSTER}" \
+          --zone "${_CLUSTER_LOCATION}" \
+          --project "$PROJECT_ID"
+
+  # Render manifestów
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        BACKEND_IMAGE="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_BACKEND_IMAGE_NAME}:${SHORT_SHA}"
+        FRONTEND_IMAGE="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_FRONTEND_IMAGE_NAME}:${SHORT_SHA}"
+        mkdir -p rendered
+        for f in k8s/*.yaml; do
+          sed \
+            -e "s|\${NAMESPACE}|${_NAMESPACE}|g" \
+            -e "s|\${BACKEND_IMAGE}|${BACKEND_IMAGE}|g" \
+            -e "s|\${FRONTEND_IMAGE}|${FRONTEND_IMAGE}|g" \
+            "$f" > "rendered/$(basename "$f")"
+        done
+        echo "Rendered manifests:"
+        ls -la rendered
+
+  # Apply (wdrożenie)
+  - name: gcr.io/cloud-builders/kubectl
+    env:
+      - "CLOUDSDK_COMPUTE_ZONE=${_CLUSTER_LOCATION}"
+      - "CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER}"
+    args: ["apply", "-f", "rendered/namespace.yaml"]
+
+  - name: gcr.io/cloud-builders/kubectl
+    env:
+      - "CLOUDSDK_COMPUTE_ZONE=${_CLUSTER_LOCATION}"
+      - "CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER}"
+    args: ["apply", "-f", "rendered/"]
+
+images:
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_BACKEND_IMAGE_NAME}:${SHORT_SHA}"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_FRONTEND_IMAGE_NAME}:${SHORT_SHA}"
