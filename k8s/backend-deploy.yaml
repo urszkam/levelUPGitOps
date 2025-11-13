@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend
-  namespace: ${NAMESPACE}
+  namespace: __NAMESPACE__
 spec:
   replicas: 2
   selector:
@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: ${BACKEND_IMAGE}
+          image: __BACKEND_IMAGE__
           ports:
             - containerPort: 8080
           readinessProbe:
