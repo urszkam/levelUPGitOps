@@ -7,8 +7,8 @@ substitutions:
   _CLUSTER: "kubernetes-cluster1"
   _CLUSTER_LOCATION: "europe-north1-b"
   _NAMESPACE: "app"
-  _BACKEND_DIR: "backend"
-  _FRONTEND_DIR: "frontend"
+  _BACKEND_DIR: "app/backend"
+  _FRONTEND_DIR: "app/frontend"
   _BACKEND_IMAGE_NAME: "backend"
   _FRONTEND_IMAGE_NAME: "frontend"
 
@@ -60,9 +60,9 @@ steps:
         mkdir -p rendered
         for f in k8s/*.yaml; do
           sed \
-            -e "s|\${NAMESPACE}|${_NAMESPACE}|g" \
-            -e "s|\${BACKEND_IMAGE}|${BACKEND_IMAGE}|g" \
-            -e "s|\${FRONTEND_IMAGE}|${FRONTEND_IMAGE}|g" \
+            -e "s|__NAMESPACE__|${_NAMESPACE}|g" \
+            -e "s|__BACKEND_IMAGE__|$${BACKEND_IMAGE}|g" \
+            -e "s|__FRONTEND_IMAGE__|$${FRONTEND_IMAGE}|g" \
             "$f" > "rendered/$(basename "$f")"
         done
         echo "Rendered manifests:"
