@@ -29,8 +29,8 @@ The solution implements a fully managed DevOps lifecycle:
 | Category | GCP Services / Tools | Artifacts / Config |
 |-----------|----------------------|--------------------|
 | **Infrastructure & Orchestration** | Google Kubernetes Engine (GKE), IAM | `k8s/*.yaml` |
-| **CI/CD Automation** | Cloud Build, Artifact Registry, Cloud Build Triggers | `.cloudbuild/cloudbuild.yaml` |
-| **Application Layer** | Containerized REST API (e.g. Python / Java / Node.js) | `app/Dockerfile` |
+| **CI/CD Automation** | Cloud Build, Artifact Registry, Cloud Build Triggers | `cloudbuild.yaml` |
+| **Application Layer** | Backend: Python REST API, Frontend: Nginx static | `app/backend/*`, `app/frontend/*` |
 | **Monitoring & Logging** | Cloud Monitoring, Cloud Logging | Dashboards, Metrics, Alerts |
 
 ---
@@ -39,16 +39,35 @@ The solution implements a fully managed DevOps lifecycle:
 
 ```
 levelUPGitOps/
-├── app/                    # Application source code & Dockerfile
-│   └── Dockerfile
-├── k8s/                    # Kubernetes manifests
-│   ├── namespace.yaml
-│   ├── deployment.yaml
-│   ├── service.yaml
-│   └── hpa.yaml
-├── .cloudbuild/            # Cloud Build pipeline configuration
-│   └── cloudbuild.yaml
-└── README.md
+├── app/ # Application source code
+│ ├── backend/ # Backend service (Python REST API)
+│ │ ├── src/
+│ │ │ └── main.py
+│ │ ├── Dockerfile
+│ │ └── requirements.txt
+│ └── frontend/ # Frontend service (Nginx-based)
+│ ├── src/
+│ ├── Dockerfile
+│ └── nginx.conf
+│
+├── k8s/ # Kubernetes manifests
+│ ├── namespace.yaml
+│ ├── backend-deploy.yaml
+│ ├── backend-service.yaml
+│ ├── frontend-deploy.yaml
+│ └── frontend-service.yaml
+│
+├── 01_Cloud_Logging_Logs_Explorer.png # Proof – Logs Explorer
+├── 02_Monitoring_Custom_Metrics.png # Proof – Custom metrics
+├── 03_Monitoring_Custom_Dashboard.png # Proof – Dashboard
+├── 04_Monitoring_Alert_Policy_Example.png # Proof – Alert policy
+│
+├── README_PROOF_MONITORING.md # Detailed monitoring proofs
+├── cloudbuild.yaml # Cloud Build pipeline
+├── docker-compose.yml # Local compose (optional)
+├── .gitignore
+├── LICENSE
+└── README.md # Main project documentation
 ```
 
 ---
@@ -110,84 +129,141 @@ Each member contributed to a distinct part of the DevOps lifecycle to ensure a r
 ---
 
 ## 🏗 Cloud Build Configuration  
+**`cloudbuild.yaml`** – pipeline builds both backend and frontend containers, pushes them to Artifact Registry, and applies updated Kubernetes manifests in the demo namespace.
 
-**`.cloudbuild/cloudbuild.yaml`**
+> Frontend can be added with a second build/push block or a separate trigger (GitOps-friendly).
 
 ```yaml
 substitutions:
   _REGION: "europe-north1"
-  _REPO:   "app"
-  _NS:     "demo"
+  _AR_REPO: "app"
+  _NS: "demo"
 
 steps:
-  # 1. Build Docker image
+  # 1️⃣ Build and push BACKEND image
   - name: "gcr.io/cloud-builders/docker"
-    args: ["build", "-t", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/app:${SHORT_SHA}", "./app"]
-
-  # 2. Push image to Artifact Registry
+    id: "Build backend image"
+    args: [
+      "build", "-t",
+      "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/backend:${SHORT_SHA}",
+      "app/backend"
+    ]
   - name: "gcr.io/cloud-builders/docker"
-    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/app:${SHORT_SHA}"]
+    id: "Push backend image"
+    args: [
+      "push",
+      "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/backend:${SHORT_SHA}"
+    ]
 
-  # 3. Patch image reference in deployment.yaml
-  - name: "gcr.io/cloud-builders/gcloud"
-    entrypoint: bash
-    args:
-      - "-c"
-      - |
-        sed -i "s|REGION-docker.pkg.dev/PROJECT_ID/app/app:\$_IMAGE_TAG|${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/app:${SHORT_SHA}|g" k8s/deployment.yaml
+  # 2️⃣ Build and push FRONTEND image
+  - name: "gcr.io/cloud-builders/docker"
+    id: "Build frontend image"
+    args: [
+      "build", "-t",
+      "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/frontend:${SHORT_SHA}",
+      "app/frontend"
+    ]
+  - name: "gcr.io/cloud-builders/docker"
+    id: "Push frontend image"
+    args: [
+      "push",
+      "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/frontend:${SHORT_SHA}"
+    ]
 
-  # 4. Connect to GKE and deploy
+  # 3️⃣ Get GKE credentials
   - name: "gcr.io/cloud-builders/gcloud"
-    args: ["container", "clusters", "get-credentials", "kubernetes-cluster1", "--zone", "europe-north1-b", "--project", "$PROJECT_ID"]
+    id: "Get GKE credentials"
+    args: [
+      "container", "clusters", "get-credentials",
+      "kubernetes-cluster1",
+      "--zone", "europe-north1-b",
+      "--project", "$PROJECT_ID"
+    ]
+
+  # 4️⃣ Apply namespace and manifests
   - name: "gcr.io/cloud-builders/kubectl"
+    id: "Apply all manifests"
     args: ["apply", "-f", "k8s/"]
 
+  # 5️⃣ Update backend and frontend images dynamically
+  - name: "gcr.io/cloud-builders/kubectl"
+    id: "Update backend image"
+    args: [
+      "-n", "${_NS}",
+      "set", "image",
+      "deployment/backend",
+      "backend=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/backend:${SHORT_SHA}"
+    ]
+  - name: "gcr.io/cloud-builders/kubectl"
+    id: "Update frontend image"
+    args: [
+      "-n", "${_NS}",
+      "set", "image",
+      "deployment/frontend",
+      "frontend=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/frontend:${SHORT_SHA}"
+    ]
+
 images:
-  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/app:${SHORT_SHA}"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/backend:${SHORT_SHA}"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/frontend:${SHORT_SHA}"
+
 ```
 
 ---
 
 ## 🧱 Kubernetes Manifests (Simplified Example)
 
-**`k8s/deployment.yaml`**
+**`k8s/backend-deploy.yaml`**
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: app
+  name: backend
   namespace: demo
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: app
+      app: backend
   template:
     metadata:
       labels:
-        app: app
+        app: backend
     spec:
       containers:
-        - name: app
-          image: europe-north1-docker.pkg.dev/PROJECT_ID/app/app:latest
+        - name: backend
+          image: europe-north1-docker.pkg.dev/PROJECT_ID/app/backend:latest
           ports:
-            - containerPort: 8080
+            - containerPort: 5000
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
 ```
 
-**`k8s/service.yaml`**
+**`k8s/frontend-service.yaml`**
 ```yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: app-svc
+  name: frontend-service
   namespace: demo
 spec:
   type: LoadBalancer
   selector:
-    app: app
+    app: frontend
   ports:
-    - port: 80
-      targetPort: 8080
+    - name: http
+      port: 80
+      targetPort: 80
 ```
 
 ---
@@ -205,6 +281,9 @@ spec:
 ### Outcome  
 Cloud Operations provides unified visibility into system health, performance bottlenecks, and real-time alerting.
 
+For detailed monitoring and logging proofs (screenshots, metrics, dashboards, alerts), see 👉 [**README_PROOF_MONITORING.md**](README_PROOF_MONITORING.md)
+
+
 ---
 
 ## 🔐 IAM Configuration Summary  
@@ -219,11 +298,11 @@ Cloud Operations provides unified visibility into system health, performance bot
 
 ## 💰 Cost Optimization Practices  
 
-- Used **Autopilot cluster mode** to minimize idle node costs.  
-- Limited resource requests in deployments (CPU/Memory).  
-- Reduced log retention to 30 days.  
-- Disabled LoadBalancer when not in use.  
-- Billing data exported to **BigQuery** for transparency and reporting.  
+- Used **standard GKE cluster (e2-micro nodes)** to minimize idle costs.  
+- Implemented **Horizontal Pod Autoscaler (HPA)** for automatic scaling.  
+- Reduced log retention to **30 days** for cost/visibility balance.  
+- Disabled external **LoadBalancer** when not needed.  
+- Optional: exported billing data to **BigQuery** for transparent reporting. 
 
 ---
 
@@ -252,7 +331,7 @@ This project showcases the **complete DevOps lifecycle** in a cloud-native envir
 - **Security**, and  
 - **Observability**.  
 
-It reflects a real-world team collaboration workflow used in professional cloud projects, integrating infrastructure management, CI/CD pipelines, and proactive monitoring — all built and documented by the **LVL UP GitOps Team**.
+It reflects a real-world DevOps collaboration model typical for enterprise environments — integrating infrastructure management, CI/CD automation, and proactive observability — all designed and delivered by the **LVL UP GitOps Team**.
 
 ---
 
