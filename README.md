@@ -128,9 +128,11 @@ Each member contributed to a distinct part of the DevOps lifecycle to ensure a r
 
 ---
 
-## 📌 Application Overview - Cloud Vulnerability Tracker
+## ☁️ Application Overview - Cloud Vulnerability Tracker
 
 The application provides a simple interface for tracking the latest Google Cloud security bulletins. It automatically gathers vulnerability information (including CVEs), determines whether remediation is required from Google Cloud, the customer, or both, and displays the results in a searchable, filterable table.
+
+![Application](app-screenshot.png)
 
 The system consists of a FastAPI backend that scrapes and processes bulletin data, and a lightweight frontend built with HTML, JavaScript, and Tailwind CSS. Both components run in Docker containers, with frontend–backend communication routed through `/api`, ensuring consistent behavior in local Docker Compose as well as in GKE deployments (via GitOps and Cloud Build).
 
