@@ -14,7 +14,7 @@ It demonstrates that observability components: logs, metrics, dashboards, and al
 
 ### 1. Proof: Cloud Logging - Logs Explorer  
 
-![Cloud Logging Proof](01_Cloud_Logging_Logs_Explorer.png)
+![Cloud Logging Proof](images/01_Cloud_Logging_Logs_Explorer.png)
 
 Screenshot from **Logs Explorer** confirming active collection of over **42,000 system logs** (Kubernetes Apiserver, `kube-system`) from the **GKE cluster**.  
 This validates that **Cloud Logging** is fully integrated with **Google Kubernetes Engine**, providing real-time access to system and application events.
@@ -23,7 +23,7 @@ This validates that **Cloud Logging** is fully integrated with **Google Kubernet
 
 ### 2. Proof: Custom Log-Based Metrics (5xx Errors & Request Count)  
 
-![Custom Metrics List Proof](02_Monitoring_Custom_Metrics.png)
+![Custom Metrics List Proof](images/02_Monitoring_Custom_Metrics.png)
 
 Screenshot from the **Log-Based Metrics** section confirming the correct configuration of two custom counters:
 
@@ -36,7 +36,7 @@ This confirms that key metrics for tracking **application reliability and error 
 
 ### 3. Proof: GKE Application Health Dashboard  
 
-![GKE Dashboard Proof](03_Monitoring_Custom_Dashboard.png)
+![GKE Dashboard Proof](images/03_Monitoring_Custom_Dashboard.png)
 
 A custom **Cloud Monitoring dashboard** titled *“levelUPGitOps - GKE Application Health”* was created to visualize live metrics for the Kubernetes environment.
 
@@ -51,7 +51,7 @@ This confirms that Cloud Monitoring provides **comprehensive visibility** into t
 
 ### 4. Proof: Alert Policy Configuration (Pod Restarts)  
 
-![Alert Policy Proof](04_Monitoring_Alert_Policy_Example.png)
+![Alert Policy Proof](images/04_Monitoring_Alert_Policy_Example.png)
 
 An **alerting policy** was configured to automatically notify the team when system instability occurs.
 

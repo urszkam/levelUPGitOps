@@ -46,9 +46,11 @@ levelUPGitOps/
 │ │ ├── Dockerfile
 │ │ └── requirements.txt
 │ └── frontend/ # Frontend service (Nginx-based)
-│ ├── src/
-│ ├── Dockerfile
-│ └── nginx.conf
+│   ├── src/
+│   | ├── index.html
+│   │ └── script.js
+│   ├── Dockerfile
+│   └── nginx.conf
 │
 ├── k8s/ # Kubernetes manifests
 │ ├── namespace.yaml
@@ -57,16 +59,18 @@ levelUPGitOps/
 │ ├── frontend-deploy.yaml
 │ └── frontend-service.yaml
 │
-├── 01_Cloud_Logging_Logs_Explorer.png # Proof – Logs Explorer
-├── 02_Monitoring_Custom_Metrics.png # Proof – Custom metrics
-├── 03_Monitoring_Custom_Dashboard.png # Proof – Dashboard
-├── 04_Monitoring_Alert_Policy_Example.png # Proof – Alert policy
+├── images/
+| ├── 01_Cloud_Logging_Logs_Explorer.png # Proof – Logs Explorer
+| ├── 02_Monitoring_Custom_Metrics.png # Proof – Custom metrics
+| ├── 03_Monitoring_Custom_Dashboard.png # Proof – Dashboard
+| ├── 04_Monitoring_Alert_Policy_Example.png # Proof – Alert policy
+│ └── app-screenshot.png # Screenshot of the deployed application
 │
-├── README_PROOF_MONITORING.md # Detailed monitoring proofs
-├── cloudbuild.yaml # Cloud Build pipeline
 ├── docker-compose.yml # Local compose (optional)
-├── .gitignore
+├── cloudbuild.yaml # Cloud Build pipeline
 ├── LICENSE
+├── .gitignore
+├── README_PROOF_MONITORING.md # Detailed monitoring proofs
 └── README.md # Main project documentation
 ```
 
@@ -132,7 +136,7 @@ Each member contributed to a distinct part of the DevOps lifecycle to ensure a r
 
 The application provides a simple interface for tracking the latest Google Cloud security bulletins. It automatically gathers vulnerability information (including CVEs), determines whether remediation is required from Google Cloud, the customer, or both, and displays the results in a searchable, filterable table.
 
-![Application](app-screenshot.png)
+![Application](images/app-screenshot.png)
 
 The system consists of a FastAPI backend that scrapes and processes bulletin data, and a lightweight frontend built with HTML, JavaScript, and Tailwind CSS. Both components run in Docker containers, with frontend–backend communication routed through `/api`, ensuring consistent behavior in local Docker Compose as well as in GKE deployments (via GitOps and Cloud Build).
 
