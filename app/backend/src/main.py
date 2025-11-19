@@ -29,13 +29,14 @@ CLIENT_KEYWORDS = [
     "manual upgrade", "take action", "requires action", "perform",
     "self-service maintenance", "customer", "manually"
 ]
+
 GCP_KEYWORDS = [
     "google has applied", "google has started", "automatically patched",
     "google cloud has rolled out", "no action required", "handled automatically",
     "google will", "google cloud has released"
 ]
 
-
+# Decide the owner for remediation based on keywords.
 def heuristic_classify(text: str):
     t = text.lower()
     client_flag = any(kw in t for kw in CLIENT_KEYWORDS)
@@ -50,7 +51,7 @@ def heuristic_classify(text: str):
     else:
         return "Unknown"
 
-
+# Pull and parse bulletins from the given documentation URL.
 async def scrape_bulletins(url: str):
     async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
         resp = await client.get(url)
@@ -81,7 +82,7 @@ async def scrape_bulletins(url: str):
         })
     return results
 
-
+# Serve bulletins optionally filtered by product.
 @app.get("/bulletins")
 async def get_bulletins(product: str = Query(None, description="np. gke, compute, sql, mesh (opcjonalnie)")):
     if product:
@@ -90,13 +91,14 @@ async def get_bulletins(product: str = Query(None, description="np. gke, compute
         data = await scrape_bulletins(DOC_URLS[product])
         return {"product": product, "count": len(data), "bulletins": data}
 
-    # Brak parametru = wszystkie źródła
+    # Missing parameter means aggregate from every source.
     tasks = [scrape_bulletins(url) for url in DOC_URLS.values()]
     results_all = await asyncio.gather(*tasks)
     merged = [item for sublist in results_all for item in sublist]
     return {"product": "all", "count": len(merged), "bulletins": merged}
 
 
+# Provide aggregate statistics grouped by managed owner.
 @app.get("/stats")
 async def get_stats():
     tasks = [scrape_bulletins(url) for url in DOC_URLS.values()]
@@ -109,7 +111,7 @@ async def get_stats():
 
     return {"total": len(merged), "by_managed": counts}
 
-
+# Lightweight health check.
 @app.get("/health")
 def health():
     return {"status": "ok"}

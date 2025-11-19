@@ -5,6 +5,7 @@ const cveFilter = document.getElementById("cveFilter");
 
 let allBulletins = [];
 
+// Fetch bulletins from the backend API for a selected source.
 async function fetchBulletins(source = "all") {
 	tableBody.innerHTML = `<tr><td colspan="6" class="text-center p-4 text-gray-500">Ładowanie...</td></tr>`;
 	let url = `${API_BASE}/bulletins`;
@@ -22,6 +23,7 @@ async function fetchBulletins(source = "all") {
 	}
 }
 
+// Render the table rows using the provided bulletin data.
 function renderTable(data) {
 	if (!data.length) {
 		tableBody.innerHTML = `<tr><td colspan="6" class="text-center p-4 text-gray-500">No matching results.</td></tr>`;
@@ -46,6 +48,7 @@ function renderTable(data) {
 	tableBody.innerHTML = rows.join("");
 }
 
+// Extract a human-friendly source name from the bulletin link.
 function extractSource(url) {
 	if (url.includes("kubernetes-engine")) return "GKE";
 	if (url.includes("compute")) return "Compute Engine";
@@ -54,7 +57,7 @@ function extractSource(url) {
 	return "-";
 }
 
-// Eventy filtrowania
+// Wire up the filters so they refresh the view in real time.
 sourceFilter.addEventListener("change", e => {
 	fetchBulletins(e.target.value);
 });
