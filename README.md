@@ -151,95 +151,92 @@ The system consists of a FastAPI backend that scrapes and processes bulletin dat
 > Frontend can be added with a second build/push block or a separate trigger (GitOps-friendly).
 
 ```yaml
+options:
+  logging: CLOUD_LOGGING_ONLY
+
 substitutions:
-    _REGION: "europe-north1"
-    _AR_REPO: "app"
-    _NS: "demo"
+  _REGION: "us-central1"
+  _AR_REPO: "proj-levelup-9-repo"
+  _CLUSTER: "kubernetes-cluster1"
+  _CLUSTER_LOCATION: "europe-north1-b"
+  _NAMESPACE: "app"
+  _BACKEND_DIR: "app/backend"
+  _FRONTEND_DIR: "app/frontend"
+  _BACKEND_IMAGE_NAME: "backend"
+  _FRONTEND_IMAGE_NAME: "frontend"
 
 steps:
-    # 1️⃣ Build and push BACKEND image
-    - name: "gcr.io/cloud-builders/docker"
-      id: "Build backend image"
-      args:
-          [
-              "build",
-              "-t",
-              "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/backend:${SHORT_SHA}",
-              "app/backend",
-          ]
-    - name: "gcr.io/cloud-builders/docker"
-      id: "Push backend image"
-      args:
-          [
-              "push",
-              "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/backend:${SHORT_SHA}",
-          ]
+  # Build & push obraz Dockera - BACKEND
+  - name: gcr.io/cloud-builders/docker
+    args: [
+      "build",
+      "-t", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_BACKEND_IMAGE_NAME}:${SHORT_SHA}",
+      "${_BACKEND_DIR}"
+    ]
+  - name: gcr.io/cloud-builders/docker
+    args: [
+      "push",
+      "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_BACKEND_IMAGE_NAME}:${SHORT_SHA}"
+    ]
 
-    # 2️⃣ Build and push FRONTEND image
-    - name: "gcr.io/cloud-builders/docker"
-      id: "Build frontend image"
-      args:
-          [
-              "build",
-              "-t",
-              "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/frontend:${SHORT_SHA}",
-              "app/frontend",
-          ]
-    - name: "gcr.io/cloud-builders/docker"
-      id: "Push frontend image"
-      args:
-          [
-              "push",
-              "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/frontend:${SHORT_SHA}",
-          ]
+  # Build & push obraz Dockera - FRONTEND
+  - name: gcr.io/cloud-builders/docker
+    args: [
+      "build",
+      "-t", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_FRONTEND_IMAGE_NAME}:${SHORT_SHA}",
+      "${_FRONTEND_DIR}"
+    ]
+  - name: gcr.io/cloud-builders/docker
+    args: [
+      "push",
+      "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_FRONTEND_IMAGE_NAME}:${SHORT_SHA}"
+    ]
 
-    # 3️⃣ Get GKE credentials
-    - name: "gcr.io/cloud-builders/gcloud"
-      id: "Get GKE credentials"
-      args:
-          [
-              "container",
-              "clusters",
-              "get-credentials",
-              "kubernetes-cluster1",
-              "--zone",
-              "europe-north1-b",
-              "--project",
-              "$PROJECT_ID",
-          ]
+  # Połączenie z klastrem
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        gcloud container clusters get-credentials "${_CLUSTER}" \
+          --zone "${_CLUSTER_LOCATION}" \
+          --project "$PROJECT_ID"
 
-    # 4️⃣ Apply namespace and manifests
-    - name: "gcr.io/cloud-builders/kubectl"
-      id: "Apply all manifests"
-      args: ["apply", "-f", "k8s/"]
+  # Render manifestów
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        BACKEND_IMAGE="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_BACKEND_IMAGE_NAME}:${SHORT_SHA}"
+        FRONTEND_IMAGE="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_FRONTEND_IMAGE_NAME}:${SHORT_SHA}"
+        mkdir -p rendered
+        for f in k8s/*.yaml; do
+          sed \
+            -e "s|__NAMESPACE__|${_NAMESPACE}|g" \
+            -e "s|__BACKEND_IMAGE__|$${BACKEND_IMAGE}|g" \
+            -e "s|__FRONTEND_IMAGE__|$${FRONTEND_IMAGE}|g" \
+            "$f" > "rendered/$(basename "$f")"
+        done
+        echo "Rendered manifests:"
+        ls -la rendered
 
-    # 5️⃣ Update backend and frontend images dynamically
-    - name: "gcr.io/cloud-builders/kubectl"
-      id: "Update backend image"
-      args:
-          [
-              "-n",
-              "${_NS}",
-              "set",
-              "image",
-              "deployment/backend",
-              "backend=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/backend:${SHORT_SHA}",
-          ]
-    - name: "gcr.io/cloud-builders/kubectl"
-      id: "Update frontend image"
-      args:
-          [
-              "-n",
-              "${_NS}",
-              "set",
-              "image",
-              "deployment/frontend",
-              "frontend=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/frontend:${SHORT_SHA}",
-          ]
+  # Apply (wdrożenie)
+  - name: gcr.io/cloud-builders/kubectl
+    env:
+      - "CLOUDSDK_COMPUTE_ZONE=${_CLUSTER_LOCATION}"
+      - "CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER}"
+    args: ["apply", "-f", "rendered/namespace.yaml"]
+
+  - name: gcr.io/cloud-builders/kubectl
+    env:
+      - "CLOUDSDK_COMPUTE_ZONE=${_CLUSTER_LOCATION}"
+      - "CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER}"
+    args: ["apply", "-f", "rendered/"]
 
 images:
-    - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/backend:${SHORT_SHA}"
-    - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/frontend:${SHORT_SHA}"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_BACKEND_IMAGE_NAME}:${SHORT_SHA}"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_FRONTEND_IMAGE_NAME}:${SHORT_SHA}"
 ```
 
 ---
@@ -252,35 +249,35 @@ images:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-    name: backend
-    namespace: demo
+  name: backend
+  namespace: __NAMESPACE__
 spec:
-    replicas: 2
-    selector:
-        matchLabels:
-            app: backend
-    template:
-        metadata:
-            labels:
-                app: backend
-        spec:
-            containers:
-                - name: backend
-                  image: europe-north1-docker.pkg.dev/PROJECT_ID/app/backend:latest
-                  ports:
-                      - containerPort: 5000
-                  livenessProbe:
-                      httpGet:
-                          path: /health
-                          port: 5000
-                      initialDelaySeconds: 10
-                      periodSeconds: 30
-                  readinessProbe:
-                      httpGet:
-                          path: /ready
-                          port: 5000
-                      initialDelaySeconds: 5
-                      periodSeconds: 10
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: __BACKEND_IMAGE__
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
 ```
 
 **`k8s/frontend-service.yaml`**
@@ -289,16 +286,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-    name: frontend-service
-    namespace: demo
+  name: frontend
+  namespace: __NAMESPACE__
 spec:
-    type: LoadBalancer
-    selector:
-        app: frontend
-    ports:
-        - name: http
-          port: 80
-          targetPort: 80
+  selector:
+    app: frontend
+  ports:
+    - port: 80
+      targetPort: 80
+  type: LoadBalancer
 ```
 
 ---
